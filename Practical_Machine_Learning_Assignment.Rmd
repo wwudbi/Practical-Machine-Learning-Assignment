@@ -1,0 +1,151 @@
+---
+title: "Practical Machine Learning Assignment"
+author: "Wei Wu"
+date: "November 8, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview
+
+This is the Course Assignment for Coursera Practical Machine Learning.  The goal of project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. We may use any of the other variables to predict with. We will create a report describing how to build the model, how to use cross validation, what we think the expected out of sample error is, and why we made the choices we did. We will also use prediction model to predict 20 different test cases
+
+## Data
+
+The training data for this project are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+## Load Libraries
+
+```{r }
+library(caret)
+library(ElemStatLearn)
+library(pgmm)
+library(rpart)
+library(gbm)
+library(lubridate)
+library(forecast)
+library(e1071)
+library(ElemStatLearn)
+library(AppliedPredictiveModeling)
+library(ggplot2)
+```
+
+## Load and Pre Process Data
+
+```{r }
+# Capture training and testing data URLs
+trainingUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testingUrl  <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+# Download training and test data
+training <- read.csv(url(trainingUrl))
+testing  <- read.csv(url(testingUrl))
+dim(training)  #19622   160
+dim(testing)   #20 160
+
+# Remove columns with N/A
+training <- training[,(colSums(is.na(training)) == 0)]
+dim(training)  #19622    93
+testing <- testing[,(colSums(is.na(testing)) == 0)]
+dim(testing)  #20 60
+
+# Remove columns with near zero variance predictors
+NZV <- nearZeroVar(training)
+training_1 <- training[, -NZV]
+dim(training_1)
+NZV <- nearZeroVar(testing)
+testing_1 <- testing[, -NZV]
+dim(testing_1)
+
+# Remove the first 5 columns
+training_2 <- training_1[, -c(1:5)]
+dim(training_2)
+testing_2 <- testing_1[, -c(1:5)]
+dim(testing_2)
+
+# Create training and validation dataset based on training_2 (after data cleansing)
+set.seed(123)
+inTrain <- createDataPartition(y=training_2$classe, p=0.7, list=FALSE)
+training_2A <- training_2[inTrain,]
+training_2B <- training_2[-inTrain,]
+dim(training_2A)    #13737    54
+dim(training_2B)    #5885   54
+```
+
+## Predict Models
+
+Predict diagnosis with all the other variables using a random forest ("rf"), boosted trees ("gbm") and linear discriminant analysis ("lda") model
+
+## Random Forest
+```{r }
+set.seed(456)
+controlRF <- trainControl(method="cv", number=3, verboseIter=FALSE)
+fitRF <- train(classe ~ ., data=training_2A, method="rf", trControl=controlRF)
+fitRF$finalModel
+predRF <- predict(fitRF, training_2B)
+confusionMatrixRF <- confusionMatrix(predRF, training_2B$classe)
+confusionMatrixRF
+# Plot
+plot(confusionMatrixRF$table, col = confusionMatrixRF$byClass, 
+     main = paste("Random Forest - Accuracy =",
+                  round(confusionMatrixRF$overall['Accuracy'], 4)))
+```
+
+## Boosted Trees
+```{r }
+set.seed(456)
+controlRF <- trainControl(method="cv", number=3, verboseIter=FALSE)
+fitGBM <- train(classe ~ ., data=training_2A, method="gbm", trControl=controlRF)
+fitGBM$finalModel
+predGBM <- predict(fitGBM, training_2B)
+confusionMatrixGBM <- confusionMatrix(predGBM, training_2B$classe)
+confusionMatrixGBM
+
+# Plot
+plot(confusionMatrixGBM$table, col = confusionMatrixGBM$byClass, 
+     main = paste("Boosted Trees - Accuracy =",
+                  round(confusionMatrixGBM$overall['Accuracy'], 4)))
+```
+
+## Linear Discriminant Analysis
+```{r }
+set.seed(456)
+fitLDA <- train(classe ~ ., data=training_2A, method="lda")
+fitLDA$finalModel
+predLDA <- predict(fitLDA, training_2B)
+confusionMatrixLDA <- confusionMatrix(predLDA, training_2B$classe)
+confusionMatrixLDA
+
+# Plot
+plot(confusionMatrixLDA$table, col = confusionMatrixLDA$byClass, 
+     main = paste("Linear Discriminant Analysis - Accuracy =",
+                  round(confusionMatrixLDA$overall['Accuracy'], 4)))
+```
+
+## Conclusion
+
+It appears that Random Forest model produces the highest accuracy rate.  We will apply against the testing data.
+- Random Forest: 0.9981 accuray
+Boosted Trees: 0.9869 accuray
+Linear Discriminant Analysis: 0.7943 accuray
+
+```{r }
+set.seed(456)
+#controlRF <- trainControl(method="cv", number=3, verboseIter=FALSE)
+#fitRF <- train(classe ~ ., data=training_2A, method="rf", trControl=controlRF)
+#fitRF$finalModel
+predTEST <- predict(fitRF, testing_2)
+predTEST
+```
+
+
+
